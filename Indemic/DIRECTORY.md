@@ -25,7 +25,7 @@ Indemic/
 ├── src/
 │   └── test/
 │       └── java/
-│           └── com/yourteam/plaguesim/
+│           └── com/Starfish/Indemic/
 │               └── model/
 │                   └── CellTest.java       # test infection logic without any GUI
 │
