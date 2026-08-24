@@ -1,6 +1,6 @@
 import java.util.Random;
 
-public class Cell{
+public class Cell {
 
     private float x;
     private float y;
@@ -31,10 +31,10 @@ public class Cell{
     public CellState getState() {
         return state;
     }
-    
+
     public void setState(CellState state) {
         this.state = state;
-    } 
+    }
 
     public void move(int sectionX, int sectionY, int width, int height) {
         x += dx;
@@ -62,7 +62,6 @@ public class Cell{
     }
 
     public boolean isColliding(Cell other) {
-
         float dxDistance = x - other.x;
         float dyDistance = y - other.y;
 
@@ -97,17 +96,16 @@ public class Cell{
             other.y--;
         }
     }
-    
-    public void getInfected(){
+
+    public void getInfected() {
         setState(CellState.INFECTED);
-        
     }
 
-    public void getCured(){
+    public void getCured() {
         setState(CellState.HEALTHY);
     }
 
-    public void death(){ // not sure what logic to implement for cells dying yet, if cells stay infected for x seconds they die?
+    public void death() { // not sure what logic to implement for cells dying yet, if cells stay infected for x seconds they die?
         setState(CellState.DEAD);
     }
 }

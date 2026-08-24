@@ -2,7 +2,7 @@ import javax.swing.JPanel;
 import java.awt.Graphics;
 import java.awt.Color;
 
-public class SimulationPanel extends JPanel { //stolen off gpt
+public class SimulationPanel extends JPanel { // stolen off gpt
 
     private World world;
 
@@ -33,11 +33,8 @@ public class SimulationPanel extends JPanel { //stolen off gpt
 
         g.drawLine(600, 0, 600, 800);
 
-
         for (Section Section : world.getSections()) {
-
             for (Cell cell : Section.getCells()) {
-
                 if (cell.getState() == CellState.HEALTHY) {
                     g.setColor(Color.GREEN);
                 } else if (cell.getState() == CellState.INFECTED) {
@@ -47,7 +44,7 @@ public class SimulationPanel extends JPanel { //stolen off gpt
                 }
 
                 g.fillOval((int) cell.getX(), (int) cell.getY(), 15, 15);
-                
+
                 g.setColor(Color.black);
                 g.drawOval((int) cell.getX(), (int) cell.getY(), 15, 15);
             }
@@ -58,7 +55,7 @@ public class SimulationPanel extends JPanel { //stolen off gpt
             g.setColor(Color.BLACK);
 
             g.drawString("Healthy: " + Section.getHealthyCount(), textX, textY);
-            g.drawString("Infected: " + Section.getInfectedCount(), textX,  textY + 20);
+            g.drawString("Infected: " + Section.getInfectedCount(), textX, textY + 20);
             g.drawString("Defenders: " + Section.getDefenderCount(), textX, textY + 40);
             g.drawString("Dead: " + Section.getDeadCount(), textX, textY + 60);
             g.drawString("Total: " + Section.getCellCount(), textX + 540, textY);
@@ -69,7 +66,7 @@ public class SimulationPanel extends JPanel { //stolen off gpt
             totalDefender += Section.getDefenderCount();
             totalDead += Section.getDeadCount();
         }
-        
+
         g.setColor(Color.BLACK);
         g.drawString("Total Healthy: " + totalHealthy, 10, 820);
         g.drawString("Total Infected: " + totalInfected, 10, 840);

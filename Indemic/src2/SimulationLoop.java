@@ -10,12 +10,9 @@ public class SimulationLoop { // stolen from gpt
         this.panel = panel;
     }
 
-    public void start() { 
-
+    public void start() {
         Timer timer = new Timer(15, e -> {
-
             update();
-
             panel.repaint();
         });
 
@@ -23,17 +20,13 @@ public class SimulationLoop { // stolen from gpt
     }
 
     public void update() {
-
         for (Section Section : world.getSections()) {
-
             for (Cell cell : Section.getCells()) {
                 cell.move(Section.getX(), Section.getY(), Section.getWidth(), Section.getHeight());
             }
 
             for (int i = 0; i < Section.getCells().size(); i++) {
-                
                 for (int j = i + 1; j < Section.getCells().size(); j++) {
-                
                     Cell cell1 = Section.getCells().get(i);
                     Cell cell2 = Section.getCells().get(j);
 

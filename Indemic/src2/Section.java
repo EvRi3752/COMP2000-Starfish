@@ -15,7 +15,6 @@ public class Section {
     private Random random = new Random();
 
     public Section(int x, int y, int width, int height, int initial_count, int infected_count, int defender_count) {
-
         this.x = x;
         this.y = y;
 
@@ -35,7 +34,6 @@ public class Section {
                 validPosition = true;
 
                 for (Cell cell : cells) {
-
                     float dx = randomX - cell.getX();
                     float dy = randomY - cell.getY();
 
@@ -46,7 +44,7 @@ public class Section {
                 }
 
                 if (validPosition) {
-                    if (i < infected_count){
+                    if (i < infected_count) {
                         cells.add(new Cell(randomX, randomY, CellState.INFECTED));
                     } else if (i < infected_count + defender_count) {
                         cells.add(new Cell(randomX, randomY, CellState.DEFENDER));
