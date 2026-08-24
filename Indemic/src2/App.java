@@ -1,24 +1,26 @@
 import javax.swing.JFrame;
+import java.awt.Dimension;
 
 public class App {
 
     public static void main(String[] args) {
 
-        world world = new world();
+        World world = new World();
 
         JFrame frame = new JFrame("Cell Simulation");
 
-        simulationPanel panel = new simulationPanel(world);
-
+        SimulationPanel panel = new SimulationPanel(world);    
+        
+        panel.setPreferredSize(new Dimension(1200, 950));
+        
         frame.add(panel);
-
-        frame.setSize(1200, 1000);
+        frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setResizable(false);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
 
-        simulationLoop loop = new simulationLoop(world, panel);
+        SimulationLoop loop = new SimulationLoop(world, panel);
         loop.start();
     }
 }
