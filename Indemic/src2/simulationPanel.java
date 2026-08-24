@@ -57,6 +57,7 @@ public class simulationPanel extends JPanel { //stolen off gpt
 
         g.setColor(Color.BLACK);
         g.drawString("Total Cells: " + totalCells, 10, 820);
+        g.drawString("//add more cell info and add options to change number of cells, infection rate, toggle to allow defender cells, reviving, etc", 10, 840);
         totalCells = 0;
     }
 }
