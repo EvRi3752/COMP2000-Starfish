@@ -46,4 +46,12 @@ public class Cell {
     public cellState getState() {
         return state;
     }
+
+    public int getX() {
+        return (int) x;
+    }
+
+    public int getY() {
+        return (int) y;
+    }
 }

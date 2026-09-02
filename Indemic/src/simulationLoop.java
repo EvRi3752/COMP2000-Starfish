@@ -17,7 +17,7 @@ public class simulationLoop {
             return;
         }
 
-        timer = new Timer(50, event -> {
+        timer = new Timer(5000, event -> {
             world.tick();
             panel.repaint();
         });
