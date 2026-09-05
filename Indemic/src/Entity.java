@@ -15,6 +15,16 @@ public class Entity {
         }
     }
 
+    public void enhanceHealthy() {
+        if (state == cellState.HEALTHY) {
+            state = cellState.ENHANCED_HEALTHY;
+        }
+    }
+
+    public void setState(cellState state) {
+        this.state = state;
+    }
+
     public void cure() {
         if (state == cellState.INFECTED) {
             state = cellState.HEALTHY;

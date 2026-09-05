@@ -5,7 +5,12 @@ import java.util.Random;
 public class world {
     private List<section> sections;
     private section[][] sectionGrid;
-    private static final int INFECTION_THRESHOLD = 10;
+    private int infectionThreshold = 10;
+    private double infectionChance = 0.3;
+    private int dnaPoints;
+    private int ticks;
+    private section startingSection;
+    private String statusMessage = "Select a section to start the infection";
     private Random random = new Random();
 
     public world(double width, double height) {
@@ -31,11 +36,19 @@ public class world {
         sectionGrid[1][0] = s10;
         sectionGrid[1][1] = s11;
         
-        // Start infection in one random section
-        sections.get(random.nextInt(sections.size())).setInitialInfection();
     }
 
     public void tick() {
+        if (startingSection == null) {
+            return;
+        }
+
+        ticks++;
+        if (ticks % 4 == 0) {
+            dnaPoints++;
+            statusMessage = "DNA point earned - choose an upgrade";
+        }
+
         // Tick all sections
         for (section currentSection : sections) {
             currentSection.tick();
@@ -50,7 +63,7 @@ public class world {
                 int totalCount = currentSection.getTotalEntityCount();
                 boolean sectionIsFullyInfected = totalCount > 0 && infectedCount == totalCount;
 
-                if (infectedCount >= INFECTION_THRESHOLD || sectionIsFullyInfected) {
+                if (infectedCount >= infectionThreshold || sectionIsFullyInfected) {
                     // Spread to adjacent sections
                     spreadToAdjacentSection(row, col, 0, -1); // Up
                     spreadToAdjacentSection(row, col, 0, 1);  // Down
@@ -80,5 +93,63 @@ public class world {
 
     public List<section> getSections() {
         return sections;
+    }
+
+    public boolean selectStartingSection(int row, int col) {
+        if (startingSection != null || row < 0 || row >= 2 || col < 0 || col >= 2) {
+            return false;
+        }
+
+        startingSection = sectionGrid[row][col];
+        startingSection.setInitialInfection();
+        statusMessage = "Infection started in section " + (row * 2 + col + 1);
+        return true;
+    }
+
+    public boolean upgradeInfectivity() {
+        if (dnaPoints < 1) {
+            statusMessage = "You need a DNA point for this upgrade";
+            return false;
+        }
+
+        dnaPoints--;
+        infectionChance = Math.min(0.8, infectionChance + 0.1);
+        for (section currentSection : sections) {
+            currentSection.setInfectionChance(infectionChance);
+        }
+        statusMessage = "Infectivity upgraded to " + (int) (infectionChance * 100) + "%";
+        return true;
+    }
+
+    public boolean upgradeTransmission() {
+        if (dnaPoints < 1) {
+            statusMessage = "You need a DNA point for this upgrade";
+            return false;
+        }
+
+        dnaPoints--;
+        infectionThreshold = Math.max(3, infectionThreshold - 2);
+        statusMessage = "Transmission threshold reduced to " + infectionThreshold;
+        return true;
+    }
+
+    public int getDnaPoints() {
+        return dnaPoints;
+    }
+
+    public double getInfectionChance() {
+        return infectionChance;
+    }
+
+    public int getInfectionThreshold() {
+        return infectionThreshold;
+    }
+
+    public boolean hasStarted() {
+        return startingSection != null;
+    }
+
+    public String getStatusMessage() {
+        return statusMessage;
     }
 }

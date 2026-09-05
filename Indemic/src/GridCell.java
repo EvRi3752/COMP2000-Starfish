@@ -41,7 +41,28 @@ public class GridCell {
     public int getInfectedCount() {
         int count = 0;
         for (Entity entity : entities) {
-            if (entity.getState() == cellState.INFECTED) {
+            if (entity.getState() == cellState.INFECTED ||
+                entity.getState() == cellState.INFECTED) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int getEnhancedHealthyCount() {
+        int count = 0;
+        for (Entity entity : entities) {
+            if (entity.getState() == cellState.ENHANCED_HEALTHY) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int getDefenderCount() {
+        int count = 0;
+        for (Entity entity : entities) {
+            if (entity.getState() == cellState.DEFENDER) {
                 count++;
             }
         }

@@ -2,6 +2,8 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import javax.swing.JPanel;
 
 public class simulationPanel extends JPanel {
@@ -9,6 +11,12 @@ public class simulationPanel extends JPanel {
 
     public simulationPanel(world world) {
         this.world = world;
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                handleClick(event.getX(), event.getY());
+            }
+        });
     }
 
     int totalEntities;
@@ -28,7 +36,59 @@ public class simulationPanel extends JPanel {
         g2d.setColor(Color.BLACK);
         g2d.drawString("Total Entities: " + totalEntities, 10, getHeight() - 20);
         g2d.drawString("Simulation Grid View - Each cell shows entity count", 10, getHeight() - 5);
+        drawHud(g2d);
         totalEntities = 0;
+    }
+
+    private void handleClick(int x, int y) {
+        if (!world.hasStarted() && x < 1200 && y < 800) {
+            int col = x / 600;
+            int row = y / 400;
+            world.selectStartingSection(row, col);
+        } else if (y >= 850 && y <= 900) {
+            if (x >= 10 && x <= 210) {
+                world.upgradeInfectivity();
+            } else if (x >= 220 && x <= 420) {
+                world.upgradeTransmission();
+            }
+        }
+        repaint();
+    }
+
+    private void drawHud(Graphics2D g) {
+        g.setColor(new Color(250, 250, 250));
+        g.fillRect(0, 820, getWidth(), 130);
+        g.setColor(Color.BLACK);
+        g.drawString("DNA points: " + world.getDnaPoints(), 10, 840);
+        g.drawString("Infectivity: " + (int) (world.getInfectionChance() * 100) + "%", 150, 840);
+        g.drawString("Section spread threshold: " + world.getInfectionThreshold(), 285, 840);
+
+        drawButton(g, 10, 850, 200, 50, "Upgrade Infectivity");
+        drawButton(g, 220, 850, 200, 50, "Upgrade Transmission");
+        g.drawString(world.getStatusMessage(), 450, 880);
+        g.setColor(new Color(70, 150, 70));
+        g.fillRect(450, 900, 15, 15);
+        g.setColor(Color.BLACK);
+        g.drawString("Enhanced healthy", 475, 912);
+        g.setColor(new Color(120, 180, 255));
+        g.fillRect(620, 900, 15, 15);
+        g.setColor(Color.BLACK);
+        g.drawString("Defender", 645, 912);
+
+        if (!world.hasStarted()) {
+            g.setColor(new Color(255, 255, 255, 210));
+            g.fillRect(0, 0, getWidth(), 50);
+            g.setColor(Color.BLACK);
+            g.drawString("Click a section to choose where the infection begins", 15, 30);
+        }
+    }
+
+    private void drawButton(Graphics2D g, int x, int y, int width, int height, String label) {
+        g.setColor(new Color(220, 230, 240));
+        g.fillRect(x, y, width, height);
+        g.setColor(Color.BLACK);
+        g.drawRect(x, y, width, height);
+        g.drawString(label, x + 15, y + 30);
     }
 
     private void drawSection(Graphics2D g, section section) {
@@ -53,10 +113,16 @@ public class simulationPanel extends JPanel {
                 // Draw cell background based on infection status
                 int healthyCount = gridCell.getHealthyCount();
                 int infectedCount = gridCell.getInfectedCount();
+                int enhancedHealthyCount = gridCell.getEnhancedHealthyCount();
+                int defenderCount = gridCell.getDefenderCount();
                 int totalCount = gridCell.getEntityCount();
 
                 if (totalCount == 0) {
                     g.setColor(new Color(240, 240, 240)); // Light gray for empty
+                } else if (defenderCount > 0) {
+                    g.setColor(new Color(120, 180, 255)); // Blue for defenders
+                } else if (enhancedHealthyCount > 0) {
+                    g.setColor(new Color(70, 150, 70)); // Dark green for enhanced healthy
                 } else if (infectedCount > healthyCount) {
                     g.setColor(new Color(255, 200, 200)); // Light red for infected majority
                 } else if (healthyCount > 0) {
@@ -89,5 +155,7 @@ public class simulationPanel extends JPanel {
         g.setColor(Color.BLACK);
         g.drawString("Healthy: " + section.getTotalHealthyCount(), statsX, statsY);
         g.drawString("Infected: " + section.getTotalInfectedCount(), statsX, statsY + 15);
+        g.drawString("Enhanced healthy: " + section.getTotalEnhancedHealthyCount(), statsX, statsY + 30);
+        g.drawString("Defenders: " + section.getTotalDefenderCount(), statsX, statsY + 45);
     }
 }
