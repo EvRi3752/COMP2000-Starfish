@@ -12,9 +12,19 @@ public class section {
     private int gridCols;
     private double infectionChance = 0.3;
     private int ticks;
-    private Random random = new Random();
+    private final Random random = new Random();
 
     public section(double x, double y, double width, double height, int gridRows, int gridCols, int initialEntityCount) {
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Section dimensions must be positive");
+        }
+        if (gridRows <= 0 || gridCols <= 0) {
+            throw new IllegalArgumentException("Grid dimensions must be positive");
+        }
+        if (initialEntityCount < 0 || initialEntityCount > gridRows * gridCols) {
+            throw new IllegalArgumentException("Initial entity count must fit within the grid");
+        }
+
         this.x = x;
         this.y = y;
         this.width = width;
@@ -87,15 +97,19 @@ public class section {
     }
 
     public void spreadInfectionToEmptyCells(int infectedCellsToAdd) {
+        if (infectedCellsToAdd < 0) {
+            throw new IllegalArgumentException("Number of infected cells to add cannot be negative");
+        }
+
         // Spread infection to empty cells when threshold is met
         for (int i = 0; i < infectedCellsToAdd; i++) {
-            List<int[]> emptyCells = new ArrayList<>();
+            List<Position> emptyCells = new ArrayList<>();
             
             // Find all empty cells
             for (int row = 0; row < gridRows; row++) {
                 for (int col = 0; col < gridCols; col++) {
                     if (grid[row][col].getEntityCount() == 0) {
-                        emptyCells.add(new int[]{row, col});
+                        emptyCells.add(new Position(row, col));
                     }
                 }
             }
@@ -103,9 +117,9 @@ public class section {
             if (emptyCells.isEmpty()) break;
             
             // Add infected entity to random empty cell
-            int[] cell = emptyCells.get(random.nextInt(emptyCells.size()));
-            Entity entity = new Entity(cell[1], cell[0], cellState.INFECTED);
-            grid[cell[0]][cell[1]].addEntity(entity);
+            Position cell = emptyCells.get(random.nextInt(emptyCells.size()));
+            Entity entity = new Entity(cell.getColumn(), cell.getRow(), cellState.INFECTED);
+            grid[cell.getRow()][cell.getColumn()].addEntity(entity);
         }
     }
 
@@ -128,7 +142,7 @@ public class section {
             // Random movement to adjacent cell with 50% chance
             if (random.nextDouble() < 0.5) {
                 // Find adjacent empty cells
-                List<int[]> emptyNeighbors = new ArrayList<>();
+                List<Position> emptyNeighbors = new ArrayList<>();
                 for (int dr = -1; dr <= 1; dr++) {
                     for (int dc = -1; dc <= 1; dc++) {
                         if (dr == 0 && dc == 0) continue; // Skip current cell
@@ -139,7 +153,7 @@ public class section {
                         // Boundary checking
                         if (newRow >= 0 && newRow < gridRows && newCol >= 0 && newCol < gridCols) {
                             if (grid[newRow][newCol].getEntityCount() == 0) {
-                                emptyNeighbors.add(new int[]{newRow, newCol});
+                                emptyNeighbors.add(new Position(newRow, newCol));
                             }
                         }
                     }
@@ -147,11 +161,11 @@ public class section {
 
                 // Move to a random empty neighbor if available
                 if (!emptyNeighbors.isEmpty()) {
-                    int[] target = emptyNeighbors.get(random.nextInt(emptyNeighbors.size()));
+                    Position target = emptyNeighbors.get(random.nextInt(emptyNeighbors.size()));
                     grid[currentRow][currentCol].removeEntity(entity);
-                    entity.setGridX(target[1]);
-                    entity.setGridY(target[0]);
-                    grid[target[0]][target[1]].addEntity(entity);
+                    entity.setGridX(target.getColumn());
+                    entity.setGridY(target.getRow());
+                    grid[target.getRow()][target.getColumn()].addEntity(entity);
                 }
             }
         }
