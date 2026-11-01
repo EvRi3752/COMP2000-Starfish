@@ -9,10 +9,16 @@ import java.util.Locale;
 import javax.swing.JPanel;
 
 public class simulationPanel extends JPanel {
-    private world world;
+    private final world world;
+    private final AudioManager audioManager;
 
     public simulationPanel(world world) {
+        this(world, new AudioManager());
+    }
+
+    public simulationPanel(world world, AudioManager audioManager) {
         this.world = world;
+        this.audioManager = audioManager;
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent event) {
@@ -46,7 +52,9 @@ public class simulationPanel extends JPanel {
         if (!world.hasStarted() && x < 1200 && y < 800) {
             int col = x / 600;
             int row = y / 400;
-            world.selectStartingSection(row, col);
+            if (world.selectStartingSection(row, col)) {
+                audioManager.startSimulationMusic();
+            }
         } else if (world.hasStarted() && x < 1200 && y < 800) {
             int sectionCol = x / 600;
             int sectionRow = y / 400;
@@ -54,7 +62,9 @@ public class simulationPanel extends JPanel {
             int cellHeight = 400 / 5;
             int cellCol = (x % 600) / cellWidth;
             int cellRow = (y % 400) / cellHeight;
-            world.claimDnaPoint(sectionRow, sectionCol, cellRow, cellCol);
+            if (world.claimDnaPoint(sectionRow, sectionCol, cellRow, cellCol)) {
+                audioManager.playDnaCollected();
+            }
         } else if (y >= 850 && y <= 900) {
             if (x >= 10 && x <= 210) {
                 world.upgradeInfectivity();
@@ -62,8 +72,16 @@ public class simulationPanel extends JPanel {
                 world.upgradeTransmission();
             } else if (x >= 700 && x <= 820) {
                 world.togglePaused();
+                if (world.isPaused()) {
+                    audioManager.playPause();
+                    audioManager.startMenuMusic();
+                } else {
+                    audioManager.startSimulationMusic();
+                }
             } else if (x >= 830 && x <= 950) {
                 world.reset();
+                audioManager.playReset();
+                audioManager.startMenuMusic();
             }
         }
         repaint();
