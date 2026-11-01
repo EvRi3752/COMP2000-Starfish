@@ -1,6 +1,14 @@
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class section {
     private GridCell[][] grid;
@@ -12,9 +20,14 @@ public class section {
     private int gridCols;
     private double infectionChance = 0.3;
     private int ticks;
-    private final Random random = new Random();
+    private InfectionStrategy infectionStrategy = new SequentialInfectionStrategy();
+    private final Random random;
 
     public section(double x, double y, double width, double height, int gridRows, int gridCols, int initialEntityCount) {
+        this(x, y, width, height, gridRows, gridCols, initialEntityCount, new Random());
+    }
+
+    public section(double x, double y, double width, double height, int gridRows, int gridCols, int initialEntityCount, Random random) {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Section dimensions must be positive");
         }
@@ -31,6 +44,7 @@ public class section {
         this.height = height;
         this.gridRows = gridRows;
         this.gridCols = gridCols;
+        this.random = random;
 
         // Initialize grid
         grid = new GridCell[gridRows][gridCols];
@@ -123,8 +137,90 @@ public class section {
         }
     }
 
+    boolean addDnaReward() {
+        List<Position> emptyCells = new ArrayList<>();
+
+        for (int row = 0; row < gridRows; row++) {
+            for (int col = 0; col < gridCols; col++) {
+                if (grid[row][col].getEntityCount() == 0) {
+                    emptyCells.add(new Position(row, col));
+                }
+            }
+        }
+
+        if (emptyCells.isEmpty()) {
+            return false;
+        }
+
+        Position cell = emptyCells.get(random.nextInt(emptyCells.size()));
+        grid[cell.getRow()][cell.getColumn()].addEntity(
+                new Entity(
+                        cell.getColumn(),
+                        cell.getRow(),
+                        cellState.REWARD,
+                        System.currentTimeMillis() + Entity.DNA_REWARD_LIFETIME_MILLIS));
+        return true;
+    }
+
+    int removeExpiredDnaRewards(long currentTimeMillis) {
+        int removed = 0;
+
+        for (int row = 0; row < gridRows; row++) {
+            for (int col = 0; col < gridCols; col++) {
+                List<Entity> entities = grid[row][col].getEntities();
+                for (int index = entities.size() - 1; index >= 0; index--) {
+                    Entity entity = entities.get(index);
+                    if (entity.getState() == cellState.REWARD
+                            && entity.isExpired(currentTimeMillis)) {
+                        entities.remove(index);
+                        removed++;
+                    }
+                }
+            }
+        }
+
+        return removed;
+    }
+
+    boolean isDnaReward(int row, int col) {
+        return getGridCell(row, col).getEntities().stream()
+                .anyMatch(entity -> entity.getState() == cellState.REWARD);
+    }
+
+    boolean claimDnaReward(int row, int col) {
+        GridCell cell = getGridCell(row, col);
+        Entity reward = cell.getEntities().stream()
+                .filter(entity -> entity.getState() == cellState.REWARD
+                        && !entity.isExpired(System.currentTimeMillis()))
+                .findFirst()
+                .orElse(null);
+
+        if (reward == null) {
+            return false;
+        }
+
+        cell.removeEntity(reward);
+        return true;
+    }
+
     public void tick() {
         ticks++;
+        moveEntities();
+
+        developEnhancedHealthy();
+        developDefenders();
+        cureNearbyInfections();
+        spreadInfection();
+    }
+
+    void setTicksForTesting(int ticks) {
+        if (ticks < 0) {
+            throw new IllegalArgumentException("Tick count cannot be negative");
+        }
+        this.ticks = ticks;
+    }
+
+    void moveEntities() {
         List<Entity> allEntities = new ArrayList<>();
 
         // Collect all entities
@@ -136,6 +232,10 @@ public class section {
 
         // Move entities randomly to adjacent empty cells
         for (Entity entity : allEntities) {
+            if (entity.getState() == cellState.REWARD) {
+                continue;
+            }
+
             int currentRow = entity.getGridY();
             int currentCol = entity.getGridX();
 
@@ -169,11 +269,13 @@ public class section {
                 }
             }
         }
+    }
 
-        developEnhancedHealthy();
-        developDefenders();
-        cureNearbyInfections();
+    void spreadInfection() {
+        infectionStrategy.spread(this);
+    }
 
+    void spreadInfectionSequential() {
         // Handle infection spread to adjacent cells
         for (int row = 0; row < gridRows; row++) {
             for (int col = 0; col < gridCols; col++) {
@@ -194,6 +296,7 @@ public class section {
                                         adjCell.getEntities().get(0).infect();
                                     }
                                 }
+
                             }
                         }
                     }
@@ -202,7 +305,77 @@ public class section {
         }
     }
 
-    private void developEnhancedHealthy() {
+    /**
+     * Calculates infection targets from a stable start-of-phase view, then
+     * applies the resulting state changes sequentially. This mode intentionally
+     * does not allow same-tick infection chaining.
+     */
+    void spreadInfectionParallelCalculation() {
+        List<InfectionAttempt> attempts = new ArrayList<>();
+
+        for (int row = 0; row < gridRows; row++) {
+            for (int col = 0; col < gridCols; col++) {
+                if (grid[row][col].getInfectedCount() == 0) {
+                    continue;
+                }
+
+                for (int dr = -1; dr <= 1; dr++) {
+                    for (int dc = -1; dc <= 1; dc++) {
+                        if (dr == 0 && dc == 0) {
+                            continue;
+                        }
+
+                        int adjRow = row + dr;
+                        int adjCol = col + dc;
+                        if (adjRow < 0 || adjRow >= gridRows
+                                || adjCol < 0 || adjCol >= gridCols) {
+                            continue;
+                        }
+
+                        GridCell adjacentCell = grid[adjRow][adjCol];
+                        if (adjacentCell.getHealthyCount() > 0) {
+                            attempts.add(new InfectionAttempt(
+                                    adjacentCell,
+                                    random.nextDouble()));
+                        }
+                    }
+                }
+            }
+        }
+
+        List<Entity> targets = attempts.parallelStream()
+                .filter(attempt -> attempt.cell.getHealthyCount() > 0)
+                .filter(attempt -> attempt.roll < infectionChance)
+                .map(attempt -> attempt.cell.getEntities().get(0))
+                .collect(Collectors.toList());
+
+        Set<Entity> uniqueTargets =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Entity target : targets) {
+            if (uniqueTargets.add(target)) {
+                target.infect();
+            }
+        }
+    }
+
+    /**
+     * Enables the opt-in two-phase infection calculation. The default remains
+     * the original sequential infection model.
+     */
+    public void setParallelInfectionEnabled(boolean enabled) {
+        infectionStrategy = enabled
+                ? new ParallelInfectionStrategy()
+                : new SequentialInfectionStrategy();
+    }
+
+    public void setInfectionStrategy(InfectionStrategy infectionStrategy) {
+        if (infectionStrategy == null) {
+            throw new IllegalArgumentException("Infection strategy cannot be null");
+        }
+        this.infectionStrategy = infectionStrategy;
+    }
+
+    void developEnhancedHealthy() {
         if (ticks % 3 != 0) {
             return;
         }
@@ -218,19 +391,14 @@ public class section {
         }
     }
 
-    private void developDefenders() {
+    void developDefenders() {
         if (ticks < 6 || ticks % 3 != 0 || getTotalInfectedCount() == 0 || random.nextDouble() >= 0.25) {
             return;
         }
 
-        List<GridCell> healthyCells = new ArrayList<>();
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                if (grid[row][col].getHealthyCount() > 0) {
-                    healthyCells.add(grid[row][col]);
-                }
-            }
-        }
+        List<GridCell> healthyCells = allCells()
+                .filter(cell -> cell.getHealthyCount() > 0)
+                .collect(java.util.stream.Collectors.toList());
 
         if (!healthyCells.isEmpty()) {
             GridCell cell = healthyCells.get(random.nextInt(healthyCells.size()));
@@ -239,7 +407,10 @@ public class section {
         }
     }
 
-    private void cureNearbyInfections() {
+    void cureNearbyInfections() {
+        Set<Entity> entitiesToCure =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+
         for (int row = 0; row < gridRows; row++) {
             for (int col = 0; col < gridCols; col++) {
                 if (grid[row][col].getDefenderCount() == 0) {
@@ -252,8 +423,10 @@ public class section {
                         int adjCol = col + dc;
                         if (adjRow >= 0 && adjRow < gridRows && adjCol >= 0 && adjCol < gridCols) {
                             for (Entity entity : grid[adjRow][adjCol].getEntities()) {
-                                if (entity.getState() == cellState.INFECTED && random.nextDouble() < 0.45) {
-                                    entity.cure();
+                                if (entity.getState() == cellState.INFECTED
+                                        && !entitiesToCure.contains(entity)
+                                        && random.nextDouble() < 0.45) {
+                                    entitiesToCure.add(entity);
                                 }
                             }
                         }
@@ -261,6 +434,8 @@ public class section {
                 }
             }
         }
+
+        entitiesToCure.forEach(Entity::cure);
     }
 
     public void setInfectionChance(double infectionChance) {
@@ -299,52 +474,72 @@ public class section {
     }
 
     public int getTotalEntityCount() {
-        int count = 0;
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                count += grid[row][col].getEntityCount();
-            }
-        }
-        return count;
+        return (int) allEntities().count();
     }
 
     public int getTotalHealthyCount() {
-        int count = 0;
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                count += grid[row][col].getHealthyCount();
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.HEALTHY);
     }
 
     public int getTotalInfectedCount() {
-        int count = 0;
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                count += grid[row][col].getInfectedCount();
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.INFECTED);
     }
 
     public int getTotalEnhancedHealthyCount() {
-        int count = 0;
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                count += grid[row][col].getEnhancedHealthyCount();
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.ENHANCED_HEALTHY);
     }
 
     public int getTotalDefenderCount() {
-        int count = 0;
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                count += grid[row][col].getDefenderCount();
-            }
+        return countEntities(entity -> entity.getState() == cellState.DEFENDER);
+    }
+
+    public Map<cellState, Long> getEntityStateCounts() {
+        return allEntities()
+                .collect(Collectors.groupingBy(
+                        Entity::getState,
+                        Collectors.counting()
+                ));
+    }
+
+    public Map<cellState, Double> getEntityStatePercentages() {
+        Map<cellState, Long> stateCounts = getEntityStateCounts();
+        long totalEntities = stateCounts.values().stream()
+                .mapToLong(Long::longValue)
+                .sum();
+        Map<cellState, Double> percentages = new EnumMap<>(cellState.class);
+
+        for (cellState state : cellState.values()) {
+            long stateCount = stateCounts.getOrDefault(state, 0L);
+            double percentage = totalEntities == 0
+                    ? 0.0
+                    : (stateCount * 100.0) / totalEntities;
+            percentages.put(state, percentage);
         }
-        return count;
+
+        return percentages;
+    }
+
+    private Stream<GridCell> allCells() {
+        return Arrays.stream(grid).flatMap(Arrays::stream);
+    }
+
+    private Stream<Entity> allEntities() {
+        return allCells().flatMap(cell -> cell.getEntities().stream());
+    }
+
+    private int countEntities(java.util.function.Predicate<Entity> condition) {
+        return (int) allEntities()
+                .filter(condition)
+                .count();
+    }
+
+    private static final class InfectionAttempt {
+        private final GridCell cell;
+        private final double roll;
+
+        private InfectionAttempt(GridCell cell, double roll) {
+            this.cell = cell;
+            this.roll = roll;
+        }
     }
 }

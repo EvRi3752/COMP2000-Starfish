@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 public class GridCell {
     private List<Entity> entities;
@@ -29,44 +30,25 @@ public class GridCell {
     }
 
     public int getHealthyCount() {
-        int count = 0;
-        for (Entity entity : entities) {
-            if (entity.getState() == cellState.HEALTHY) {
-                count++;
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.HEALTHY);
     }
 
     public int getInfectedCount() {
-        int count = 0;
-        for (Entity entity : entities) {
-            if (entity.getState() == cellState.INFECTED ||
-                entity.getState() == cellState.INFECTED) {
-                count++;
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.INFECTED);
     }
 
     public int getEnhancedHealthyCount() {
-        int count = 0;
-        for (Entity entity : entities) {
-            if (entity.getState() == cellState.ENHANCED_HEALTHY) {
-                count++;
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.ENHANCED_HEALTHY);
     }
 
     public int getDefenderCount() {
-        int count = 0;
-        for (Entity entity : entities) {
-            if (entity.getState() == cellState.DEFENDER) {
-                count++;
-            }
-        }
-        return count;
+        return countEntities(entity -> entity.getState() == cellState.DEFENDER);
+    }
+
+    private int countEntities(Predicate<Entity> condition) {
+        return (int) entities.stream()
+                .filter(condition)
+                .count();
     }
 
     public int getGridX() {

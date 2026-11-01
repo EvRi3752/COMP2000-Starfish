@@ -4,5 +4,6 @@ public enum cellState {
     INFECTED,
     ENHANCED_HEALTHY,
     DEFENDER,
+    REWARD,
     DEAD
 }

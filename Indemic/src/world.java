@@ -3,17 +3,36 @@ import java.util.List;
 import java.util.Random;
 
 public class world {
+    private final double width;
+    private final double height;
     private List<section> sections;
     private section[][] sectionGrid;
     private int infectionThreshold = 10;
     private double infectionChance = 0.3;
     private int dnaPoints;
+    private int pendingDnaPoints;
     private int ticks;
     private section startingSection;
     private String statusMessage = "Select a section to start the infection";
-    private Random random = new Random();
+    private Random random;
+    private boolean paused;
 
     public world(double width, double height) {
+        this(width, height, new Random());
+    }
+
+    public world(double width, double height, long seed) {
+        this(width, height, new Random(seed));
+    }
+
+    private world(double width, double height, Random random) {
+        this.width = width;
+        this.height = height;
+        this.random = random;
+        createSections();
+    }
+
+    private void createSections() {
         double sectionWidth = width / 2;
         double sectionHeight = height / 2;
 
@@ -21,10 +40,10 @@ public class world {
         sectionGrid = new section[2][2];
         
         // Create 2x2 grid of sections, each with a 5x5 grid of cells and a sparse starting population so there is still room to move.
-        section s00 = new section(0.0, 0.0, sectionWidth, sectionHeight, 5, 5, 15);
-        section s01 = new section(sectionWidth, 0.0, sectionWidth, sectionHeight, 5, 5, 15);
-        section s10 = new section(0.0, sectionHeight, sectionWidth, sectionHeight, 5, 5, 15);
-        section s11 = new section(sectionWidth, sectionHeight, sectionWidth, sectionHeight, 5, 5, 15);
+        section s00 = new section(0.0, 0.0, sectionWidth, sectionHeight, 5, 5, 15, new Random(random.nextLong()));
+        section s01 = new section(sectionWidth, 0.0, sectionWidth, sectionHeight, 5, 5, 15, new Random(random.nextLong()));
+        section s10 = new section(0.0, sectionHeight, sectionWidth, sectionHeight, 5, 5, 15, new Random(random.nextLong()));
+        section s11 = new section(sectionWidth, sectionHeight, sectionWidth, sectionHeight, 5, 5, 15, new Random(random.nextLong()));
         
         sections.add(s00);
         sections.add(s01);
@@ -39,14 +58,17 @@ public class world {
     }
 
     public void tick() {
-        if (startingSection == null) {
+        if (startingSection == null || paused) {
             return;
         }
 
         ticks++;
+        expireDnaRewards();
         if (ticks % 4 == 0) {
-            dnaPoints++;
-            statusMessage = "DNA point earned - choose an upgrade";
+            if (startingSection.addDnaReward()) {
+                pendingDnaPoints++;
+                statusMessage = "DNA point appeared in the grid";
+            }
         }
 
         // Tick all sections
@@ -71,6 +93,20 @@ public class world {
                     spreadToAdjacentSection(row, col, 1, 0);  // Right
                 }
             }
+        }
+    }
+
+    private void expireDnaRewards() {
+        int expiredRewards = 0;
+        long currentTimeMillis = System.currentTimeMillis();
+
+        for (section currentSection : sections) {
+            expiredRewards += currentSection.removeExpiredDnaRewards(currentTimeMillis);
+        }
+
+        pendingDnaPoints = Math.max(0, pendingDnaPoints - expiredRewards);
+        if (expiredRewards > 0) {
+            statusMessage = "A DNA point expired";
         }
     }
 
@@ -106,6 +142,28 @@ public class world {
         return true;
     }
 
+    public void togglePaused() {
+        paused = !paused;
+        statusMessage = paused ? "Simulation paused" : "Simulation resumed";
+    }
+
+    public boolean isPaused() {
+        return paused;
+    }
+
+    public void reset() {
+        random = new Random(random.nextLong());
+        infectionThreshold = 10;
+        infectionChance = 0.3;
+        dnaPoints = 0;
+        pendingDnaPoints = 0;
+        ticks = 0;
+        startingSection = null;
+        paused = false;
+        statusMessage = "Select a section to start the infection";
+        createSections();
+    }
+
     public boolean upgradeInfectivity() {
         if (dnaPoints < 1) {
             statusMessage = "You need a DNA point for this upgrade";
@@ -135,6 +193,42 @@ public class world {
 
     public int getDnaPoints() {
         return dnaPoints;
+    }
+
+    public int getPendingDnaPoints() {
+        return pendingDnaPoints;
+    }
+
+    public boolean hasPendingDnaPoint() {
+        return pendingDnaPoints > 0;
+    }
+
+    public boolean claimDnaPoint(int row, int col) {
+        if (startingSection == null || !startingSection.claimDnaReward(row, col)) {
+            return false;
+        }
+
+        pendingDnaPoints--;
+        dnaPoints++;
+        statusMessage = "DNA point collected - choose an upgrade";
+        return true;
+    }
+
+    public boolean claimDnaPoint(int sectionRow, int sectionCol, int cellRow, int cellCol) {
+        if (sectionRow < 0 || sectionRow >= sectionGrid.length
+                || sectionCol < 0 || sectionCol >= sectionGrid[sectionRow].length) {
+            return false;
+        }
+
+        section selectedSection = sectionGrid[sectionRow][sectionCol];
+        if (!selectedSection.claimDnaReward(cellRow, cellCol)) {
+            return false;
+        }
+
+        pendingDnaPoints--;
+        dnaPoints++;
+        statusMessage = "DNA point collected - choose an upgrade";
+        return true;
     }
 
     public double getInfectionChance() {

@@ -4,6 +4,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.Map;
+import java.util.Locale;
 import javax.swing.JPanel;
 
 public class simulationPanel extends JPanel {
@@ -45,11 +47,23 @@ public class simulationPanel extends JPanel {
             int col = x / 600;
             int row = y / 400;
             world.selectStartingSection(row, col);
+        } else if (world.hasStarted() && x < 1200 && y < 800) {
+            int sectionCol = x / 600;
+            int sectionRow = y / 400;
+            int cellWidth = 600 / 5;
+            int cellHeight = 400 / 5;
+            int cellCol = (x % 600) / cellWidth;
+            int cellRow = (y % 400) / cellHeight;
+            world.claimDnaPoint(sectionRow, sectionCol, cellRow, cellCol);
         } else if (y >= 850 && y <= 900) {
             if (x >= 10 && x <= 210) {
                 world.upgradeInfectivity();
             } else if (x >= 220 && x <= 420) {
                 world.upgradeTransmission();
+            } else if (x >= 700 && x <= 820) {
+                world.togglePaused();
+            } else if (x >= 830 && x <= 950) {
+                world.reset();
             }
         }
         repaint();
@@ -65,6 +79,8 @@ public class simulationPanel extends JPanel {
 
         drawButton(g, 10, 850, 200, 50, "Upgrade Infectivity");
         drawButton(g, 220, 850, 200, 50, "Upgrade Transmission");
+        drawButton(g, 700, 850, 120, 50, world.isPaused() ? "Resume" : "Pause");
+        drawButton(g, 830, 850, 120, 50, "Reset");
         g.drawString(world.getStatusMessage(), 450, 880);
         g.setColor(new Color(70, 150, 70));
         g.fillRect(450, 900, 15, 15);
@@ -81,6 +97,7 @@ public class simulationPanel extends JPanel {
             g.setColor(Color.BLACK);
             g.drawString("Click a section to choose where the infection begins", 15, 30);
         }
+
     }
 
     private void drawButton(Graphics2D g, int x, int y, int width, int height, String label) {
@@ -115,10 +132,14 @@ public class simulationPanel extends JPanel {
                 int infectedCount = gridCell.getInfectedCount();
                 int enhancedHealthyCount = gridCell.getEnhancedHealthyCount();
                 int defenderCount = gridCell.getDefenderCount();
+                boolean reward = gridCell.getEntities().stream()
+                        .anyMatch(entity -> entity.getState() == cellState.REWARD);
                 int totalCount = gridCell.getEntityCount();
 
                 if (totalCount == 0) {
                     g.setColor(new Color(240, 240, 240)); // Light gray for empty
+                } else if (reward) {
+                    g.setColor(new Color(255, 220, 80));
                 } else if (defenderCount > 0) {
                     g.setColor(new Color(120, 180, 255)); // Blue for defenders
                 } else if (enhancedHealthyCount > 0) {
@@ -136,7 +157,12 @@ public class simulationPanel extends JPanel {
                 g.setStroke(new BasicStroke(1));
                 g.drawRect(x, y, cellWidth, cellHeight);
 
-                // Track entity count (no text display since each cell has exactly 1 entity)
+                if (reward) {
+                    g.setColor(Color.BLACK);
+                    g.drawString("DNA", x + cellWidth / 2 - 12, y + cellHeight / 2);
+                    g.drawString("CLICK", x + cellWidth / 2 - 15, y + cellHeight / 2 + 15);
+                }
+
                 if (totalCount > 0) {
                     totalEntities += totalCount;
                 }
@@ -151,11 +177,30 @@ public class simulationPanel extends JPanel {
         // Draw section statistics
         int statsX = sectionX + 5;
         int statsY = sectionY + sectionHeight + 15;
+        Map<cellState, Long> stateCounts = section.getEntityStateCounts();
+        Map<cellState, Double> statePercentages = section.getEntityStatePercentages();
 
         g.setColor(Color.BLACK);
-        g.drawString("Healthy: " + section.getTotalHealthyCount(), statsX, statsY);
-        g.drawString("Infected: " + section.getTotalInfectedCount(), statsX, statsY + 15);
-        g.drawString("Enhanced healthy: " + section.getTotalEnhancedHealthyCount(), statsX, statsY + 30);
-        g.drawString("Defenders: " + section.getTotalDefenderCount(), statsX, statsY + 45);
+        g.drawString(getStateStatistics(cellState.HEALTHY, stateCounts, statePercentages), statsX, statsY);
+        g.drawString(getStateStatistics(cellState.INFECTED, stateCounts, statePercentages), statsX, statsY + 15);
+        g.drawString(getStateStatistics(cellState.ENHANCED_HEALTHY, stateCounts, statePercentages), statsX, statsY + 30);
+        g.drawString(getStateStatistics(cellState.DEFENDER, stateCounts, statePercentages), statsX, statsY + 45);
+        g.drawString(getStateStatistics(cellState.DEAD, stateCounts, statePercentages), statsX, statsY + 60);
+    }
+
+    private String getStateStatistics(
+            cellState state,
+            Map<cellState, Long> stateCounts,
+            Map<cellState, Double> statePercentages) {
+        long stateCount = stateCounts.getOrDefault(state, 0L);
+        double percentage = statePercentages.getOrDefault(state, 0.0);
+        String label = state.name().replace('_', ' ');
+        return String.format(
+                Locale.ROOT,
+                "%s: %d (%.2f%%)",
+                label,
+                stateCount,
+                percentage
+        );
     }
 }
