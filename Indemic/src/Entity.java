@@ -1,9 +1,11 @@
 public class Entity {
     public static final long DNA_REWARD_LIFETIME_MILLIS = 60_000L;
+    public static final long CURE_IMMUNITY_LIFETIME_MILLIS = 60_000L;
     private cellState state;
     private int gridX; // Grid position
     private int gridY; // Grid position
     private long expiresAt;
+    private long immuneUntil;
 
     public Entity(int gridX, int gridY, cellState state) {
         this(gridX, gridY, state, 0L);
@@ -17,7 +19,10 @@ public class Entity {
     }
 
     public void infect() {
-        if (state == cellState.HEALTHY) {
+        if ((state == cellState.HEALTHY
+                || state == cellState.ENHANCED_HEALTHY
+                || state == cellState.DEFENDER)
+                && !isImmune(System.currentTimeMillis())) {
             state = cellState.INFECTED;
         }
     }
@@ -35,6 +40,7 @@ public class Entity {
     public void cure() {
         if (state == cellState.INFECTED) {
             state = cellState.HEALTHY;
+            immuneUntil = System.currentTimeMillis() + CURE_IMMUNITY_LIFETIME_MILLIS;
         }
     }
 
@@ -60,5 +66,9 @@ public class Entity {
 
     public boolean isExpired(long currentTimeMillis) {
         return expiresAt > 0 && currentTimeMillis >= expiresAt;
+    }
+
+    public boolean isImmune(long currentTimeMillis) {
+        return currentTimeMillis < immuneUntil;
     }
 }

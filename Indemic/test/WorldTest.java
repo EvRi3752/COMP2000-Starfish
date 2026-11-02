@@ -6,6 +6,44 @@ import org.junit.jupiter.api.Test;
 
 class WorldTest {
     @Test
+    void gameStartsInProgressAndResetClearsOutcome() {
+        world simulation = new world(1200, 800, 42L);
+
+        assertEquals(GameOutcome.IN_PROGRESS, simulation.getOutcome());
+        assertFalse(simulation.isGameOver());
+
+        simulation.reset();
+
+        assertEquals(GameOutcome.IN_PROGRESS, simulation.getOutcome());
+    }
+
+    @Test
+    void difficultyControlsSectionSpecialEntities() {
+        world simulation = new world(1200, 800, 42L);
+
+        assertTrue(simulation.setDifficulty(Difficulty.EASY));
+        assertEquals(Difficulty.EASY, simulation.getDifficulty());
+        assertTrue(simulation.selectStartingSection(0, 0));
+        for (int tick = 0; tick < 12; tick++) {
+            simulation.tick();
+        }
+
+        for (section currentSection : simulation.getSections()) {
+            assertEquals(0, currentSection.getTotalEnhancedHealthyCount());
+            assertEquals(0, currentSection.getTotalDefenderCount());
+        }
+    }
+
+    @Test
+    void difficultyCannotChangeAfterStarting() {
+        world simulation = new world(1200, 800, 42L);
+        assertTrue(simulation.selectStartingSection(0, 0));
+
+        assertFalse(simulation.setDifficulty(Difficulty.HARD));
+        assertEquals(Difficulty.NORMAL, simulation.getDifficulty());
+    }
+
+    @Test
     void rewardAppearsAndMustBeClaimedFromItsCell() {
         world simulation = new world(1200, 800, 42L);
         assertTrue(simulation.selectStartingSection(0, 0));

@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class section {
+    private static final double ENHANCED_HEALTHY_INFECTION_MULTIPLIER = 0.1;
     private GridCell[][] grid;
     private double x;
     private double y;
@@ -22,6 +23,7 @@ public class section {
     private int ticks;
     private InfectionStrategy infectionStrategy = new SequentialInfectionStrategy();
     private final Random random;
+    private Difficulty difficulty = Difficulty.NORMAL;
 
     public section(double x, double y, double width, double height, int gridRows, int gridCols, int initialEntityCount) {
         this(x, y, width, height, gridRows, gridCols, initialEntityCount, new Random());
@@ -207,10 +209,14 @@ public class section {
         ticks++;
         moveEntities();
 
-        developEnhancedHealthy();
-        developDefenders();
-        cureNearbyInfections();
+        if (difficulty.isEnhancedHealthyEnabled()) {
+            developEnhancedHealthy();
+        }
+        if (difficulty.areDefendersEnabled()) {
+            developDefenders();
+        }
         spreadInfection();
+        cureNearbyInfections();
     }
 
     void setTicksForTesting(int ticks) {
@@ -290,11 +296,10 @@ public class section {
                             int adjCol = col + dc;
                             
                             if (adjRow >= 0 && adjRow < gridRows && adjCol >= 0 && adjCol < gridCols) {
-                                GridCell adjCell = grid[adjRow][adjCol];
-                                if (adjCell.getHealthyCount() > 0) {
-                                    if (random.nextDouble() < infectionChance) {
-                                        adjCell.getEntities().get(0).infect();
-                                    }
+                                Entity target = getInfectionTarget(grid[adjRow][adjCol]);
+                                if (target != null
+                                        && random.nextDouble() < getInfectionChance(target)) {
+                                    target.infect();
                                 }
 
                             }
@@ -332,10 +337,10 @@ public class section {
                             continue;
                         }
 
-                        GridCell adjacentCell = grid[adjRow][adjCol];
-                        if (adjacentCell.getHealthyCount() > 0) {
+                        Entity target = getInfectionTarget(grid[adjRow][adjCol]);
+                        if (target != null) {
                             attempts.add(new InfectionAttempt(
-                                    adjacentCell,
+                                    target,
                                     random.nextDouble()));
                         }
                     }
@@ -344,9 +349,10 @@ public class section {
         }
 
         List<Entity> targets = attempts.parallelStream()
-                .filter(attempt -> attempt.cell.getHealthyCount() > 0)
-                .filter(attempt -> attempt.roll < infectionChance)
-                .map(attempt -> attempt.cell.getEntities().get(0))
+                .filter(attempt -> attempt.target.getState() == cellState.HEALTHY
+                        || attempt.target.getState() == cellState.ENHANCED_HEALTHY)
+                .filter(attempt -> attempt.roll < getInfectionChance(attempt.target))
+                .map(attempt -> attempt.target)
                 .collect(Collectors.toList());
 
         Set<Entity> uniqueTargets =
@@ -358,16 +364,6 @@ public class section {
         }
     }
 
-    /**
-     * Enables the opt-in two-phase infection calculation. The default remains
-     * the original sequential infection model.
-     */
-    public void setParallelInfectionEnabled(boolean enabled) {
-        infectionStrategy = enabled
-                ? new ParallelInfectionStrategy()
-                : new SequentialInfectionStrategy();
-    }
-
     public void setInfectionStrategy(InfectionStrategy infectionStrategy) {
         if (infectionStrategy == null) {
             throw new IllegalArgumentException("Infection strategy cannot be null");
@@ -375,15 +371,26 @@ public class section {
         this.infectionStrategy = infectionStrategy;
     }
 
+    public void setDifficulty(Difficulty difficulty) {
+        if (difficulty == null) {
+            throw new IllegalArgumentException("Difficulty cannot be null");
+        }
+        this.difficulty = difficulty;
+    }
+
+    public Difficulty getDifficulty() {
+        return difficulty;
+    }
+
     void developEnhancedHealthy() {
-        if (ticks % 3 != 0) {
+        if (ticks % 5 != 0) {
             return;
         }
 
         for (int row = 0; row < gridRows; row++) {
             for (int col = 0; col < gridCols; col++) {
                 for (Entity entity : grid[row][col].getEntities()) {
-                    if (entity.getState() == cellState.HEALTHY && random.nextDouble() < 0.12) {
+                    if (entity.getState() == cellState.HEALTHY && random.nextDouble() < 0.05) {
                         entity.enhanceHealthy();
                     }
                 }
@@ -392,7 +399,9 @@ public class section {
     }
 
     void developDefenders() {
-        if (ticks < 6 || ticks % 3 != 0 || getTotalInfectedCount() == 0 || random.nextDouble() >= 0.25) {
+        int defenderLimit = Math.max(1, getTotalEntityCount() / 10);
+        if (ticks < 6 || ticks % 3 != 0 || getTotalInfectedCount() == 0
+                || getTotalDefenderCount() >= defenderLimit || random.nextDouble() >= 0.25) {
             return;
         }
 
@@ -425,7 +434,7 @@ public class section {
                             for (Entity entity : grid[adjRow][adjCol].getEntities()) {
                                 if (entity.getState() == cellState.INFECTED
                                         && !entitiesToCure.contains(entity)
-                                        && random.nextDouble() < 0.45) {
+                                        && random.nextDouble() < 0.25) {
                                     entitiesToCure.add(entity);
                                 }
                             }
@@ -440,6 +449,26 @@ public class section {
 
     public void setInfectionChance(double infectionChance) {
         this.infectionChance = infectionChance;
+    }
+
+    public double getInfectionChance() {
+        return infectionChance;
+    }
+
+    private double getInfectionChance(Entity target) {
+        return target.getState() == cellState.ENHANCED_HEALTHY
+                || target.getState() == cellState.DEFENDER
+                ? infectionChance * ENHANCED_HEALTHY_INFECTION_MULTIPLIER
+                : infectionChance;
+    }
+
+    private Entity getInfectionTarget(GridCell cell) {
+        return cell.getEntities().stream()
+                .filter(entity -> entity.getState() == cellState.HEALTHY
+                        || entity.getState() == cellState.ENHANCED_HEALTHY
+                        || entity.getState() == cellState.DEFENDER)
+                .findFirst()
+                .orElse(null);
     }
 
     public GridCell getGridCell(int row, int col) {
@@ -534,11 +563,11 @@ public class section {
     }
 
     private static final class InfectionAttempt {
-        private final GridCell cell;
+        private final Entity target;
         private final double roll;
 
-        private InfectionAttempt(GridCell cell, double roll) {
-            this.cell = cell;
+        private InfectionAttempt(Entity target, double roll) {
+            this.target = target;
             this.roll = roll;
         }
     }

@@ -13,11 +13,31 @@ class EntityTest {
     }
 
     @Test
+    void enhancedHealthyEntityCanBecomeInfected() {
+        Entity entity = new Entity(1, 2, cellState.ENHANCED_HEALTHY);
+
+        entity.infect();
+
+        assertEquals(cellState.INFECTED, entity.getState());
+    }
+
+    @Test
+    void defenderCanBecomeInfected() {
+        Entity entity = new Entity(1, 2, cellState.DEFENDER);
+
+        entity.infect();
+
+        assertEquals(cellState.INFECTED, entity.getState());
+    }
+
+    @Test
     void infectedEntityCanBeCured() {
         Entity entity = new Entity(1, 2, cellState.INFECTED);
 
         entity.cure();
 
+        assertEquals(cellState.HEALTHY, entity.getState());
+        entity.infect();
         assertEquals(cellState.HEALTHY, entity.getState());
     }
 

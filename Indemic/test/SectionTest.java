@@ -17,7 +17,7 @@ class SectionTest {
     void tickPreservesEntityCountInBothInfectionModes() {
         section sequential = createSection();
         section parallel = createSection();
-        parallel.setParallelInfectionEnabled(true);
+        parallel.setInfectionStrategy(new ParallelInfectionStrategy());
 
         for (int i = 0; i < 10; i++) {
             sequential.tick();
@@ -53,6 +53,16 @@ class SectionTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> simulation.setInfectionStrategy(null));
+    }
+
+    @Test
+    void enhancedHealthyDevelopmentUsesSlowerCadence() {
+        section simulation = createSection();
+        simulation.setDifficulty(Difficulty.NORMAL);
+        simulation.setTicksForTesting(1);
+        simulation.tick();
+
+        assertEquals(0, simulation.getTotalEnhancedHealthyCount());
     }
 
     private static section createSection() {

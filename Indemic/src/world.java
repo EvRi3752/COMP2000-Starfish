@@ -16,6 +16,8 @@ public class world {
     private String statusMessage = "Select a section to start the infection";
     private Random random;
     private boolean paused;
+    private Difficulty difficulty = Difficulty.NORMAL;
+    private GameOutcome outcome = GameOutcome.IN_PROGRESS;
 
     public world(double width, double height) {
         this(width, height, new Random());
@@ -54,11 +56,15 @@ public class world {
         sectionGrid[0][1] = s01;
         sectionGrid[1][0] = s10;
         sectionGrid[1][1] = s11;
+
+        for (section currentSection : sections) {
+            currentSection.setDifficulty(difficulty);
+        }
         
     }
 
     public void tick() {
-        if (startingSection == null || paused) {
+        if (startingSection == null || paused || outcome != GameOutcome.IN_PROGRESS) {
             return;
         }
 
@@ -93,6 +99,30 @@ public class world {
                     spreadToAdjacentSection(row, col, 1, 0);  // Right
                 }
             }
+        }
+
+        updateGameOutcome();
+    }
+
+    private void updateGameOutcome() {
+        int infectedEntities = 0;
+        int susceptibleEntities = 0;
+
+        for (section currentSection : sections) {
+            infectedEntities += currentSection.getTotalInfectedCount();
+            susceptibleEntities += currentSection.getTotalHealthyCount()
+                    + currentSection.getTotalEnhancedHealthyCount()
+                    + currentSection.getTotalDefenderCount();
+        }
+
+        if (susceptibleEntities == 0) {
+            outcome = GameOutcome.WON;
+            paused = true;
+            statusMessage = "You win! No healthy entities remain.";
+        } else if (infectedEntities == 0) {
+            outcome = GameOutcome.LOST;
+            paused = true;
+            statusMessage = "You lose! No infected entities remain.";
         }
     }
 
@@ -142,6 +172,23 @@ public class world {
         return true;
     }
 
+    public boolean setDifficulty(Difficulty difficulty) {
+        if (difficulty == null || startingSection != null) {
+            return false;
+        }
+
+        this.difficulty = difficulty;
+        for (section currentSection : sections) {
+            currentSection.setDifficulty(difficulty);
+        }
+        statusMessage = difficulty.getLabel() + " difficulty selected";
+        return true;
+    }
+
+    public Difficulty getDifficulty() {
+        return difficulty;
+    }
+
     public void togglePaused() {
         paused = !paused;
         statusMessage = paused ? "Simulation paused" : "Simulation resumed";
@@ -149,6 +196,14 @@ public class world {
 
     public boolean isPaused() {
         return paused;
+    }
+
+    public GameOutcome getOutcome() {
+        return outcome;
+    }
+
+    public boolean isGameOver() {
+        return outcome != GameOutcome.IN_PROGRESS;
     }
 
     public void reset() {
@@ -160,6 +215,7 @@ public class world {
         ticks = 0;
         startingSection = null;
         paused = false;
+        outcome = GameOutcome.IN_PROGRESS;
         statusMessage = "Select a section to start the infection";
         createSections();
     }

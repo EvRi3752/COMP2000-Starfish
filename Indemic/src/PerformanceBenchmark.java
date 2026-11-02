@@ -43,7 +43,9 @@ public final class PerformanceBenchmark {
                 5_000,
                 new Random(42));
         simulation.setInitialInfection();
-        simulation.setParallelInfectionEnabled(parallel);
+        simulation.setInfectionStrategy(parallel
+                ? new ParallelInfectionStrategy()
+                : new SequentialInfectionStrategy());
         return simulation;
     }
 }

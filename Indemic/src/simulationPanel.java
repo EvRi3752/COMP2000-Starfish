@@ -7,37 +7,39 @@ import java.awt.event.MouseEvent;
 import java.util.Map;
 import java.util.Locale;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 public class simulationPanel extends JPanel {
-    private final world world;
-    private final AudioManager audioManager;
+    private static final long serialVersionUID = 1L;
+    private final transient world world;
+    private final transient AudioManager audioManager;
 
     public simulationPanel(world world) {
         this(world, new AudioManager());
     }
 
+    @SuppressWarnings("this-escape")
     public simulationPanel(world world, AudioManager audioManager) {
         this.world = world;
         this.audioManager = audioManager;
-        addMouseListener(new MouseAdapter() {
+        SwingUtilities.invokeLater(() -> addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent event) {
                 handleClick(event.getX(), event.getY());
             }
-        });
+        }));
     }
-
-    int totalEntities;
 
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        
+
         Graphics2D g2d = (Graphics2D) g;
+        int totalEntities = 0;
 
         // Draw grid for each section
         for (section section : world.getSections()) {
-            drawSection(g2d, section);
+            totalEntities += drawSection(g2d, section);
         }
 
         // Draw statistics
@@ -45,7 +47,6 @@ public class simulationPanel extends JPanel {
         g2d.drawString("Total Entities: " + totalEntities, 10, getHeight() - 20);
         g2d.drawString("Simulation Grid View - Each cell shows entity count", 10, getHeight() - 5);
         drawHud(g2d);
-        totalEntities = 0;
     }
 
     private void handleClick(int x, int y) {
@@ -70,6 +71,12 @@ public class simulationPanel extends JPanel {
                 world.upgradeInfectivity();
             } else if (x >= 220 && x <= 420) {
                 world.upgradeTransmission();
+            } else if (!world.hasStarted() && x >= 450 && x <= 570) {
+                world.setDifficulty(Difficulty.EASY);
+            } else if (!world.hasStarted() && x >= 580 && x <= 700) {
+                world.setDifficulty(Difficulty.NORMAL);
+            } else if (!world.hasStarted() && x >= 710 && x <= 830) {
+                world.setDifficulty(Difficulty.HARD);
             } else if (x >= 700 && x <= 820) {
                 world.togglePaused();
                 if (world.isPaused()) {
@@ -89,7 +96,7 @@ public class simulationPanel extends JPanel {
 
     private void drawHud(Graphics2D g) {
         g.setColor(new Color(250, 250, 250));
-        g.fillRect(0, 820, getWidth(), 130);
+        g.fillRect(0, 820, getWidth(), 180);
         g.setColor(Color.BLACK);
         g.drawString("DNA points: " + world.getDnaPoints(), 10, 840);
         g.drawString("Infectivity: " + (int) (world.getInfectionChance() * 100) + "%", 150, 840);
@@ -97,17 +104,33 @@ public class simulationPanel extends JPanel {
 
         drawButton(g, 10, 850, 200, 50, "Upgrade Infectivity");
         drawButton(g, 220, 850, 200, 50, "Upgrade Transmission");
-        drawButton(g, 700, 850, 120, 50, world.isPaused() ? "Resume" : "Pause");
-        drawButton(g, 830, 850, 120, 50, "Reset");
-        g.drawString(world.getStatusMessage(), 450, 880);
+        if (!world.hasStarted()) {
+            drawButton(g, 450, 850, 120, 50, "Easy");
+            drawButton(g, 580, 850, 120, 50, "Normal");
+            drawButton(g, 710, 850, 120, 50, "Hard");
+        } else {
+            drawButton(g, 700, 850, 120, 50, world.isPaused() ? "Resume" : "Pause");
+            drawButton(g, 830, 850, 120, 50, "Reset");
+        }
+        g.drawString(world.getStatusMessage(), 10, 920);
+        if (world.isGameOver()) {
+            g.setColor(new Color(255, 255, 255, 220));
+            g.fillRect(300, 300, 600, 110);
+            g.setColor(world.getOutcome() == GameOutcome.WON
+                    ? new Color(20, 120, 40)
+                    : new Color(170, 30, 30));
+            g.drawString(world.getOutcome() == GameOutcome.WON ? "YOU WIN!" : "YOU LOSE!", 550, 345);
+            g.setColor(Color.BLACK);
+            g.drawString("Click Reset to play again.", 500, 375);
+        }
         g.setColor(new Color(70, 150, 70));
         g.fillRect(450, 900, 15, 15);
         g.setColor(Color.BLACK);
-        g.drawString("Enhanced healthy", 475, 912);
+        g.drawString("Enhanced healthy", 475, 913);
         g.setColor(new Color(120, 180, 255));
         g.fillRect(620, 900, 15, 15);
         g.setColor(Color.BLACK);
-        g.drawString("Defender", 645, 912);
+        g.drawString("Defender", 645, 913);
 
         if (!world.hasStarted()) {
             g.setColor(new Color(255, 255, 255, 210));
@@ -126,7 +149,8 @@ public class simulationPanel extends JPanel {
         g.drawString(label, x + 15, y + 30);
     }
 
-    private void drawSection(Graphics2D g, section section) {
+    private int drawSection(Graphics2D g, section section) {
+        int totalEntities = 0;
         int sectionX = (int) section.getX();
         int sectionY = (int) section.getY();
         int sectionWidth = (int) section.getWidth();
@@ -204,6 +228,7 @@ public class simulationPanel extends JPanel {
         g.drawString(getStateStatistics(cellState.ENHANCED_HEALTHY, stateCounts, statePercentages), statsX, statsY + 30);
         g.drawString(getStateStatistics(cellState.DEFENDER, stateCounts, statePercentages), statsX, statsY + 45);
         g.drawString(getStateStatistics(cellState.DEAD, stateCounts, statePercentages), statsX, statsY + 60);
+        return totalEntities;
     }
 
     private String getStateStatistics(
