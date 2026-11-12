@@ -245,8 +245,9 @@ public class section {
             int currentRow = entity.getGridY();
             int currentCol = entity.getGridX();
 
-            // Random movement to adjacent cell with 50% chance
-            if (random.nextDouble() < 0.5) {
+            boolean isDefender = entity.getState() == cellState.DEFENDER;
+
+            if (isDefender || random.nextDouble() < 0.5) {
                 // Find adjacent empty cells
                 List<Position> emptyNeighbors = new ArrayList<>();
                 for (int dr = -1; dr <= 1; dr++) {
@@ -265,97 +266,130 @@ public class section {
                     }
                 }
 
-                // Move to a random empty neighbor if available
                 if (!emptyNeighbors.isEmpty()) {
-                    Position target = emptyNeighbors.get(random.nextInt(emptyNeighbors.size()));
-                    grid[currentRow][currentCol].removeEntity(entity);
-                    entity.setGridX(target.getColumn());
-                    entity.setGridY(target.getRow());
-                    grid[target.getRow()][target.getColumn()].addEntity(entity);
+                    MovementStrategy strategy = isDefender ? defenderMovementStrategy: randomMovementStrategy;
+                    Position target = strategy.chooseDestination(entity, this, emptyNeighbors, random);
+
+                    if (target != null && emptyNeighbors.stream().anyMatch(choice -> choice.getRow() == target.getRow() && choice.getColumn() == target.getColumn())) {
+                        grid[currentRow][currentCol].removeEntity(entity);
+
+                        entity.setGridX(target.getColumn());
+                        entity.setGridY(target.getRow());
+
+                        grid[target.getRow()][target.getColumn()].addEntity(entity);
+                    }
                 }
+
             }
         }
     }
+
+    int distanceToNearestInfected(int row, int col) {
+        int closest = Integer.MAX_VALUE;
+
+        for (int r = 0; r < gridRows; r++) {
+            for (int c = 0; c < gridCols; c++) {
+                if (grid[r][c].getInfectedCount() > 0) {
+                    int distance = Math.abs(r - row) + Math.abs(c - col);
+                    closest = Math.min(closest, distance);
+                }
+            }
+        }
+
+        return closest;
+    }
+
+
+    public void setDefenderMovementStrategy(MovementStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("Defender movement strategy cannot be null");
+        }
+
+        defenderMovementStrategy = strategy;
+    }
+
 
     void spreadInfection() {
         infectionStrategy.spread(this);
     }
 
+    void spreadInfectionSequential() {
+        applyInfectionAttempts(
+            collectInfectionAttempts().stream()
+        );
+    }
 
-void spreadInfectionSequential() {
-    applyInfectionAttempts(
-        collectInfectionAttempts().stream()
-    );
-}
+    void spreadInfectionParallelCalculation() {
+        applyInfectionAttempts(
+            collectInfectionAttempts().parallelStream()
+        );
+    }
 
-void spreadInfectionParallelCalculation() {
-    applyInfectionAttempts(
-        collectInfectionAttempts().parallelStream()
-    );
-}
+    private List<InfectionAttempt> collectInfectionAttempts() {
+        List<InfectionAttempt> attempts = new ArrayList<>();
 
-private List<InfectionAttempt> collectInfectionAttempts() {
-    List<InfectionAttempt> attempts = new ArrayList<>();
+        for (int row = 0; row < gridRows; row++) {
+            for (int col = 0; col < gridCols; col++) {
 
-    for (int row = 0; row < gridRows; row++) {
-        for (int col = 0; col < gridCols; col++) {
+                if (grid[row][col].getInfectedCount() == 0) {
+                    continue;
+                }
 
-            if (grid[row][col].getInfectedCount() == 0) {
-                continue;
-            }
+                for (int dr = -1; dr <= 1; dr++) {
+                    for (int dc = -1; dc <= 1; dc++) {
 
-            for (int dr = -1; dr <= 1; dr++) {
-                for (int dc = -1; dc <= 1; dc++) {
+                        if (dr == 0 && dc == 0) {
+                            continue;
+                        }
 
-                    if (dr == 0 && dc == 0) {
-                        continue;
-                    }
+                        int adjRow = row + dr;
+                        int adjCol = col + dc;
 
-                    int adjRow = row + dr;
-                    int adjCol = col + dc;
+                        if (adjRow < 0 || adjRow >= gridRows
+                                || adjCol < 0 || adjCol >= gridCols) {
+                            continue;
+                        }
 
-                    if (adjRow < 0 || adjRow >= gridRows
-                            || adjCol < 0 || adjCol >= gridCols) {
-                        continue;
-                    }
+                        Entity target = getInfectionTarget(
+                            grid[adjRow][adjCol]
+                        );
 
-                    Entity target = getInfectionTarget(
-                        grid[adjRow][adjCol]
-                    );
-
-                    if (target != null) {
-                        attempts.add(new InfectionAttempt(
-                            target,
-                            random.nextDouble()
-                        ));
+                        if (target != null) {
+                            attempts.add(new InfectionAttempt(
+                                target,
+                                random.nextDouble()
+                            ));
+                        }
                     }
                 }
             }
         }
+
+        return attempts;
     }
 
-    return attempts;
-}
+    private void applyInfectionAttempts(
+            Stream<InfectionAttempt> attempts) {
 
-private void applyInfectionAttempts(
-        Stream<InfectionAttempt> attempts) {
+        List<Entity> targets = attempts
+            .filter(attempt ->
+                attempt.roll < getInfectionChance(attempt.target))
+            .map(attempt -> attempt.target)
+            .collect(Collectors.toList());
 
-    List<Entity> targets = attempts
-        .filter(attempt ->
-            attempt.roll < getInfectionChance(attempt.target))
-        .map(attempt -> attempt.target)
-        .collect(Collectors.toList());
+        Set<Entity> uniqueTargets =
+            Collections.newSetFromMap(new IdentityHashMap<>());
 
-    Set<Entity> uniqueTargets =
-        Collections.newSetFromMap(new IdentityHashMap<>());
-
-    for (Entity target : targets) {
-        if (uniqueTargets.add(target)) {
-            target.infect();
+        for (Entity target : targets) {
+            if (uniqueTargets.add(target)) {
+                target.infect();
+            }
         }
     }
-}
 
+    private final MovementStrategy randomMovementStrategy = new RandomMovement();
+
+    private MovementStrategy defenderMovementStrategy = new PinpointInfection();
 
     public void setInfectionStrategy(InfectionStrategy infectionStrategy) {
         if (infectionStrategy == null) {
