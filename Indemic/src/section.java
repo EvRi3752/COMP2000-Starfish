@@ -281,88 +281,81 @@ public class section {
         infectionStrategy.spread(this);
     }
 
-    void spreadInfectionSequential() {
-        // Handle infection spread to adjacent cells
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                GridCell cell = grid[row][col];
-                if (cell.getInfectedCount() > 0) {
-                    // Infect healthy entities in adjacent cells
-                    for (int dr = -1; dr <= 1; dr++) {
-                        for (int dc = -1; dc <= 1; dc++) {
-                            if (dr == 0 && dc == 0) continue;
-                            
-                            int adjRow = row + dr;
-                            int adjCol = col + dc;
-                            
-                            if (adjRow >= 0 && adjRow < gridRows && adjCol >= 0 && adjCol < gridCols) {
-                                Entity target = getInfectionTarget(grid[adjRow][adjCol]);
-                                if (target != null
-                                        && random.nextDouble() < getInfectionChance(target)) {
-                                    target.infect();
-                                }
 
-                            }
-                        }
+void spreadInfectionSequential() {
+    applyInfectionAttempts(
+        collectInfectionAttempts().stream()
+    );
+}
+
+void spreadInfectionParallelCalculation() {
+    applyInfectionAttempts(
+        collectInfectionAttempts().parallelStream()
+    );
+}
+
+private List<InfectionAttempt> collectInfectionAttempts() {
+    List<InfectionAttempt> attempts = new ArrayList<>();
+
+    for (int row = 0; row < gridRows; row++) {
+        for (int col = 0; col < gridCols; col++) {
+
+            if (grid[row][col].getInfectedCount() == 0) {
+                continue;
+            }
+
+            for (int dr = -1; dr <= 1; dr++) {
+                for (int dc = -1; dc <= 1; dc++) {
+
+                    if (dr == 0 && dc == 0) {
+                        continue;
+                    }
+
+                    int adjRow = row + dr;
+                    int adjCol = col + dc;
+
+                    if (adjRow < 0 || adjRow >= gridRows
+                            || adjCol < 0 || adjCol >= gridCols) {
+                        continue;
+                    }
+
+                    Entity target = getInfectionTarget(
+                        grid[adjRow][adjCol]
+                    );
+
+                    if (target != null) {
+                        attempts.add(new InfectionAttempt(
+                            target,
+                            random.nextDouble()
+                        ));
                     }
                 }
             }
         }
     }
 
-    /**
-     * Calculates infection targets from a stable start-of-phase view, then
-     * applies the resulting state changes sequentially. This mode intentionally
-     * does not allow same-tick infection chaining.
-     */
-    void spreadInfectionParallelCalculation() {
-        List<InfectionAttempt> attempts = new ArrayList<>();
+    return attempts;
+}
 
-        for (int row = 0; row < gridRows; row++) {
-            for (int col = 0; col < gridCols; col++) {
-                if (grid[row][col].getInfectedCount() == 0) {
-                    continue;
-                }
+private void applyInfectionAttempts(
+        Stream<InfectionAttempt> attempts) {
 
-                for (int dr = -1; dr <= 1; dr++) {
-                    for (int dc = -1; dc <= 1; dc++) {
-                        if (dr == 0 && dc == 0) {
-                            continue;
-                        }
+    List<Entity> targets = attempts
+        .filter(attempt ->
+            attempt.roll < getInfectionChance(attempt.target))
+        .map(attempt -> attempt.target)
+        .collect(Collectors.toList());
 
-                        int adjRow = row + dr;
-                        int adjCol = col + dc;
-                        if (adjRow < 0 || adjRow >= gridRows
-                                || adjCol < 0 || adjCol >= gridCols) {
-                            continue;
-                        }
+    Set<Entity> uniqueTargets =
+        Collections.newSetFromMap(new IdentityHashMap<>());
 
-                        Entity target = getInfectionTarget(grid[adjRow][adjCol]);
-                        if (target != null) {
-                            attempts.add(new InfectionAttempt(
-                                    target,
-                                    random.nextDouble()));
-                        }
-                    }
-                }
-            }
-        }
-
-        List<Entity> targets = attempts.parallelStream()
-                .filter(attempt -> attempt.target.getState() == cellState.HEALTHY
-                        || attempt.target.getState() == cellState.ENHANCED_HEALTHY)
-                .filter(attempt -> attempt.roll < getInfectionChance(attempt.target))
-                .map(attempt -> attempt.target)
-                .collect(Collectors.toList());
-
-        Set<Entity> uniqueTargets =
-                Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Entity target : targets) {
-            if (uniqueTargets.add(target)) {
-                target.infect();
-            }
+    for (Entity target : targets) {
+        if (uniqueTargets.add(target)) {
+            target.infect();
         }
     }
+}
+
 
     public void setInfectionStrategy(InfectionStrategy infectionStrategy) {
         if (infectionStrategy == null) {

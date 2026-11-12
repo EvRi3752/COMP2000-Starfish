@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 public class world {
@@ -19,6 +20,15 @@ public class world {
     private Difficulty difficulty = Difficulty.NORMAL;
     private GameOutcome outcome = GameOutcome.IN_PROGRESS;
 
+    private final List<SimulationObserver> observers = new ArrayList<>();
+    private final SimulationEventLog eventLog = new SimulationEventLog();
+
+    private final int[] quarantineEndTicks = new int[4];
+    private final boolean[] outbreakAnnounced = new boolean[4];
+
+    public static final double OUTBREAK_THRESHOLD = 0.40;
+    private static final double OUTBREAK_RESET_THRESHOLD = 0.20;
+
     public world(double width, double height) {
         this(width, height, new Random());
     }
@@ -32,6 +42,8 @@ public class world {
         this.height = height;
         this.random = random;
         createSections();
+        addObserver(eventLog);
+        addObserver(new QuarantineController(this));
     }
 
     private void createSections() {
@@ -69,6 +81,7 @@ public class world {
         }
 
         ticks++;
+        expireQuarantines();
         expireDnaRewards();
         if (ticks % 4 == 0) {
             if (startingSection.addDnaReward()) {
@@ -82,6 +95,8 @@ public class world {
             currentSection.tick();
         }
         
+        detectOutbreaks();
+
         // Check for inter-section infection spread
         for (int row = 0; row < 2; row++) {
             for (int col = 0; col < 2; col++) {
@@ -140,22 +155,28 @@ public class world {
         }
     }
 
-    private void spreadToAdjacentSection(int currentRow, int currentCol, int dRow, int dCol) {
+
+    private void spreadToAdjacentSection(
+            int currentRow, int currentCol,
+            int dRow, int dCol) {
+
         int newRow = currentRow + dRow;
         int newCol = currentCol + dCol;
-        
-        // Boundary check
+
         if (newRow >= 0 && newRow < 2 && newCol >= 0 && newCol < 2) {
+            if (isQuarantined(currentRow * 2 + currentCol) || isQuarantined(newRow * 2 + newCol)) {
+                return;
+            }
+
             section adjacentSection = sectionGrid[newRow][newCol];
-            
-            // Only spread if the adjacent section still has room to accept new infected entities.
+
             if (adjacentSection.getTotalEntityCount() < 20) {
-                // Add 2-3 infected entities to the adjacent section
-                int infectedToAdd = random.nextInt(2) + 2; // 2-3 entities
+                int infectedToAdd = random.nextInt(2) + 2;
                 adjacentSection.spreadInfectionToEmptyCells(infectedToAdd);
             }
         }
     }
+
 
     public List<section> getSections() {
         return sections;
@@ -213,6 +234,11 @@ public class world {
         dnaPoints = 0;
         pendingDnaPoints = 0;
         ticks = 0;
+        
+        java.util.Arrays.fill(quarantineEndTicks, 0);
+        java.util.Arrays.fill(outbreakAnnounced, false);
+        eventLog.clear();
+        
         startingSection = null;
         paused = false;
         outcome = GameOutcome.IN_PROGRESS;
@@ -301,5 +327,84 @@ public class world {
 
     public String getStatusMessage() {
         return statusMessage;
+    }
+
+
+    public void addObserver(SimulationObserver observer) {
+        SimulationObserver valid = Objects.requireNonNull(observer);
+
+        if (!observers.contains(valid)) {
+            observers.add(valid);
+        }
+    }
+
+    public void removeObserver(SimulationObserver observer) {
+        observers.remove(observer);
+    }
+
+    private void publishEvent(SimulationEvent event) {
+        for (SimulationObserver observer : List.copyOf(observers)) {
+            observer.onSimulationEvent(event);
+        }
+    }
+
+    private void detectOutbreaks() {
+        for (int index = 0; index < sections.size(); index++) {
+            section region = sections.get(index);
+
+            int population = region.getTotalHealthyCount() + region.getTotalEnhancedHealthyCount() + region.getTotalDefenderCount() + region.getTotalInfectedCount();
+
+            double infectedFraction = population == 0 ? 0.0: region.getTotalInfectedCount() / (double) population;
+
+            if (infectedFraction <= OUTBREAK_RESET_THRESHOLD) {
+                outbreakAnnounced[index] = false;
+            } else if (infectedFraction >= OUTBREAK_THRESHOLD && !outbreakAnnounced[index]) {
+                outbreakAnnounced[index] = true;
+
+                publishEvent(new SimulationEvent(SimulationEvent.Type.OUTBREAK_DETECTED, ticks, index, "Section " + (index + 1) + " outbreak: " + Math.round(infectedFraction * 100) + "% infected"));
+            }
+        }
+    }
+
+
+    void quarantineSection(int sectionIndex, int durationTicks) {
+        if (sectionIndex < 0 || sectionIndex >= sections.size() || durationTicks <= 0 || isQuarantined(sectionIndex)) {
+            return;
+        }
+
+        quarantineEndTicks[sectionIndex] = ticks + durationTicks;
+        String message = "Section " + (sectionIndex + 1) + " quarantined for " + durationTicks + " ticks";
+        statusMessage = message;
+
+        publishEvent(new SimulationEvent(SimulationEvent.Type.QUARANTINE_STARTED, ticks, sectionIndex, message));
+    }
+
+    public boolean isQuarantined(int sectionIndex) {
+        if (sectionIndex < 0 || sectionIndex >= quarantineEndTicks.length) {
+            throw new IllegalArgumentException("Invalid section index");
+        }
+
+        return quarantineEndTicks[sectionIndex] > ticks;
+    }
+
+    private void expireQuarantines() {
+        for (int i = 0; i < quarantineEndTicks.length; i++) {
+            if (quarantineEndTicks[i] > 0 && ticks >= quarantineEndTicks[i]) {
+                quarantineEndTicks[i] = 0;
+
+                publishEvent(new SimulationEvent(SimulationEvent.Type.QUARANTINE_ENDED, ticks, i, "Quarantine ended in section " + (i + 1)));
+            }
+        }
+    }
+
+    public int getQuarantineTicksRemaining(int sectionIndex) {
+        if (sectionIndex < 0 || sectionIndex >= quarantineEndTicks.length) {
+            throw new IllegalArgumentException("Invalid section index: " + sectionIndex);
+        }
+        return Math.max(0, quarantineEndTicks[sectionIndex] - ticks);
+    }
+
+    public List<SimulationEvent> getRecentEvents() {
+        return eventLog.getRecentEvents();
     }
 }

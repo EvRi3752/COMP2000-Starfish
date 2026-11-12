@@ -38,8 +38,9 @@ public class simulationPanel extends JPanel {
         int totalEntities = 0;
 
         // Draw grid for each section
+        int sectionIndex = 0;
         for (section section : world.getSections()) {
-            totalEntities += drawSection(g2d, section);
+            totalEntities += drawSection(g2d, section, sectionIndex++);
         }
 
         // Draw statistics
@@ -113,6 +114,12 @@ public class simulationPanel extends JPanel {
             drawButton(g, 830, 850, 120, 50, "Reset");
         }
         g.drawString(world.getStatusMessage(), 10, 920);
+        java.util.List<SimulationEvent> recentEvents = world.getRecentEvents();
+        if (!recentEvents.isEmpty()) {
+            g.setColor(new Color(115, 60, 25));
+            g.drawString("Recent: " + recentEvents.get(0).message(), 10, 945);
+            g.setColor(Color.BLACK);
+        }
         if (world.isGameOver()) {
             g.setColor(new Color(255, 255, 255, 220));
             g.fillRect(300, 300, 600, 110);
@@ -149,7 +156,7 @@ public class simulationPanel extends JPanel {
         g.drawString(label, x + 15, y + 30);
     }
 
-    private int drawSection(Graphics2D g, section section) {
+    private int drawSection(Graphics2D g, section section, int sectionIndex) {
         int totalEntities = 0;
         int sectionX = (int) section.getX();
         int sectionY = (int) section.getY();
@@ -211,10 +218,19 @@ public class simulationPanel extends JPanel {
             }
         }
 
-        // Draw thick section border
-        g.setColor(Color.BLACK);
-        g.setStroke(new BasicStroke(4)); // Thick border for section
+        // Highlight a quarantined section and display the remaining ticks.
+        boolean quarantined = world.isQuarantined(sectionIndex);
+        if (quarantined) {
+            g.setColor(new Color(250, 150, 45, 235));
+            g.fillRoundRect(sectionX + sectionWidth - 205, sectionY + 8,
+                    195, 32, 8, 8);
+            g.setColor(Color.BLACK);
+            g.drawString("QUARANTINE: " + world.getQuarantineTicksRemaining(sectionIndex) + " ticks", sectionX + sectionWidth - 195, sectionY + 28);
+        }
+        g.setColor(quarantined ? new Color(220, 115, 20) : Color.BLACK);
+        g.setStroke(new BasicStroke(quarantined ? 6 : 4));
         g.drawRect(sectionX, sectionY, sectionWidth, sectionHeight);
+        g.setStroke(new BasicStroke(1));
 
         // Draw section statistics
         int statsX = sectionX + 5;
