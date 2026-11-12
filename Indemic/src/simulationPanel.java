@@ -232,18 +232,25 @@ public class simulationPanel extends JPanel {
         g.drawRect(sectionX, sectionY, sectionWidth, sectionHeight);
         g.setStroke(new BasicStroke(1));
 
-        // Draw section statistics
-        int statsX = sectionX + 5;
-        int statsY = sectionY + sectionHeight + 15;
+        // Draw statistics inside each section
+        int statsX = sectionX + 10;
+        int statsY = sectionY + 20;
+
         Map<cellState, Long> stateCounts = section.getEntityStateCounts();
         Map<cellState, Double> statePercentages = section.getEntityStatePercentages();
 
+        // Draw a semi-transparent background
+        g.setColor(new Color(255, 255, 255, 200));
+        g.fillRoundRect(sectionX + 5, sectionY + 5, 230, 91, 8, 8);
+
+        // Draw the statistics
         g.setColor(Color.BLACK);
-        g.drawString(getStateStatistics(cellState.HEALTHY, stateCounts, statePercentages), statsX, statsY);
-        g.drawString(getStateStatistics(cellState.INFECTED, stateCounts, statePercentages), statsX, statsY + 15);
-        g.drawString(getStateStatistics(cellState.ENHANCED_HEALTHY, stateCounts, statePercentages), statsX, statsY + 30);
-        g.drawString(getStateStatistics(cellState.DEFENDER, stateCounts, statePercentages), statsX, statsY + 45);
-        g.drawString(getStateStatistics(cellState.DEAD, stateCounts, statePercentages), statsX, statsY + 60);
+        g.drawString("Section " + (sectionIndex + 1), statsX, statsY);
+        g.drawString(getStateStatistics(cellState.HEALTHY, stateCounts, statePercentages), statsX, statsY + 17);
+        g.drawString(getStateStatistics(cellState.INFECTED, stateCounts, statePercentages), statsX, statsY + 34);
+        g.drawString(getStateStatistics(cellState.DEFENDER, stateCounts, statePercentages), statsX, statsY + 51);
+        g.drawString(getStateStatistics(cellState.ENHANCED_HEALTHY, stateCounts, statePercentages), statsX, statsY + 68);
+
         return totalEntities;
     }
 
